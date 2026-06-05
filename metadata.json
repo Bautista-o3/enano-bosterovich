@@ -1,0 +1,6 @@
+{
+  "name": "Maxi el Enano Bostero",
+  "description": "Juego 3D isométrico de Maxi el Enano Bostero faenando vacas, cocinando asado y vendiendo en la parrilla.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Maxi el Enano Bostero - 3D</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #87CEEB;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Custom scrollbar for shop */
+        .shop-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .shop-scroll::-webkit-scrollbar-track {
+            background: #001233;
+        }
+        .shop-scroll::-webkit-scrollbar-thumb {
+            background: #FFD700;
+            border-radius: 3px;
+        }
+        /* Custom floating text animations */
+        @keyframes float-up {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-80px) scale(1.2); opacity: 0; }
+        }
+        .float-text {
+            animation: float-up 1.2s ease-out forwards;
+        }
+        /* Custom vignette overlay for speed boost */
+        .vignette-boost {
+            box-shadow: inset 0 0 80px rgba(34, 197, 94, 0.6);
+            pointer-events: none;
+        }
+        /* Resaca screen effect */
+        .resaca-blur {
+            filter: blur(2px);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen">
+
+    <!-- Screen overlays -->
+    <div id="redFlash" class="absolute inset-0 bg-red-600 opacity-0 pointer-events-none transition-opacity duration-150 z-10"></div>
+    <div id="boostOverlay" class="absolute inset-0 vignette-boost opacity-0 transition-opacity duration-300 z-10"></div>
+    <div id="blurOverlay" class="absolute inset-0 bg-yellow-950/10 pointer-events-none opacity-0 transition-opacity duration-300 z-10"></div>
+
+    <!-- UI Overlay / HUD -->
+    <div class="absolute inset-x-0 top-0 p-4 flex justify-between items-start pointer-events-none z-20">
+        <!-- Coins & Info -->
+        <div class="flex flex-col gap-1 pointer-events-auto bg-blue-950/80 border-2 border-[#FFD700] rounded-xl p-3 shadow-lg max-w-xs">
+            <div class="flex items-center gap-2">
+                <span class="text-3xl">💰</span>
+                <span id="coinCounter" class="text-2xl font-black text-[#FFD700] tracking-wider">$0</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs font-bold text-white mt-1 border-t border-[#FFD700]/30 pt-1">
+                <span>🥩 Carne Cruda:</span>
+                <span id="rawCounter" class="text-yellow-400">0</span>
+                <span class="ml-2">🔥 Cocida:</span>
+                <span id="cookedCounter" class="text-green-400">0</span>
+            </div>
+        </div>
+
+        <!-- Timers, Boost & Alerts -->
+        <div class="flex flex-col items-end gap-2 text-right">
+            <div id="timerContainer" class="hidden pointer-events-auto flex flex-col gap-1">
+                <div id="fernanditoTimer" class="bg-green-900/90 border-2 border-green-400 text-green-200 text-xs font-black px-3 py-1.5 rounded-lg shadow-md animate-pulse">
+                    ⚡ Fernet Activo: <span id="boostTimeLeft">20s</span>
+                </div>
+                <div id="resacaTimer" class="bg-amber-950/95 border-2 border-amber-600 text-amber-200 text-xs font-black px-3 py-1.5 rounded-lg shadow-md animate-pulse">
+                    🍺 Resaca con Ricky: <span id="resacaTimeLeft">15s</span>
+                </div>
+            </div>
+            <div class="bg-blue-900/60 text-[#FFD700] text-[10px] font-mono font-bold px-2 py-1 rounded border border-[#FFD700]/30 uppercase tracking-widest bg-blue-950/90">
+                La Boca, Buenos Aires ⚽
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Info Rail & Trigger -->
+    <div class="absolute inset-x-0 bottom-0 p-4 flex flex-col gap-3 justify-end items-center pointer-events-none z-20">
+        <!-- Maxi Status Speech bubble -->
+        <div id="statusBubble" class="transition-all duration-300 transform scale-100 bg-white border-2 border-blue-900 font-bold text-blue-950 text-xs rounded-xl px-4 py-2 shadow-lg max-w-sm pointer-events-auto bubble-anim relative">
+            "¡Che! ¡Metéle un click a una vaca para empezar a faenar!"
+            <div class="absolute w-3 h-3 bg-white border-r-2 border-b-2 border-blue-900 rotate-45 -bottom-1.5 left-1/2 transform -translate-x-1/2"></div>
+        </div>
+
+        <div class="flex justify-center items-center gap-4 w-full max-w-xl pointer-events-auto">
+            <!-- Shop Trigger -->
+            <button onclick="toggleShop()" class="bg-[#0033A0] hover:bg-blue-800 border-4 border-[#FFD700] hover:border-yellow-300 text-[#FFD700] font-black tracking-wide text-sm py-3 px-6 rounded-2xl shadow-2xl active:scale-95 transition-all flex items-center gap-2 cursor-pointer">
+                🛒 TIENDA XENEIZE (E)
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast / Bubble alerts -->
+    <div id="toastAlert" class="absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-400 border-4 border-blue-900 border-double text-blue-950 font-black text-sm px-6 py-3 rounded-xl shadow-2xl pointer-events-none opacity-0 scale-90 transition-all duration-300 z-50 max-w-md text-center">
+        Mensaje
+    </div>
+
+    <!-- Welcome / Click Start Overlay -->
+    <div id="welcomeScreen" class="absolute inset-0 bg-blue-950/95 flex flex-col justify-center items-center p-6 text-center z-50 transition-opacity duration-300">
+        <div class="max-w-md bg-gradient-to-b from-[#0033A0] to-blue-900 border-4 border-[#FFD700] rounded-3xl p-8 shadow-2xl flex flex-col items-center">
+            <h1 class="text-[#FFD700] text-4xl font-extrabold tracking-tight mb-2 uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                Maxi el Enano Bostero
+            </h1>
+            <p class="text-yellow-400 font-mono text-sm tracking-wider uppercase mb-6 drop-shadow">
+                3D Asador Simulator 🥩⚽
+            </p>
+            
+            <div class="text-left text-xs text-white/90 space-y-2 mb-6 border-y border-[#FFD700]/30 py-4 max-h-48 overflow-y-auto shop-scroll">
+                <p>🙋‍♂️ <strong>Controlá a Maxi</strong> con <strong>WASD</strong> (o los botones de pantalla en celu).</p>
+                <p>🐮 <strong>Hacé click en una vaca</strong> (estando cerca) para faenarla. ¡Sale sangre y bifes!</p>
+                <p>🥩 <strong>Juntá la carne</strong> del piso corriendo por encima.</p>
+                <p>🔥 <strong>Acercáte a la Parrilla</strong> para cocinar asado automáticamente.</p>
+                <p>🏪 <strong>Corré al Kiosko de Venta</strong> y clickeá para vender asado cocido por monedas.</p>
+                <p>🛒 <strong>Usá la Tienda</strong> para comprar ayudantes automáticos, mejoras de parrilla y fernet para correr a lo loco.</p>
+            </div>
+
+            <!-- Start Button -->
+            <button onclick="startGameEngine()" class="bg-[#FFD700] hover:bg-yellow-400 border-4 border-blue-900 text-blue-950 font-black text-lg py-4 px-10 rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all uppercase cursor-pointer">
+                ¡EMPEZAR EL ASADO! ⚽🔥
+            </button>
+            <p class="text-white/60 text-[10px] mt-4 font-mono">Creado para la hinchada de Boca Juniors</p>
+        </div>
+    </div>
+
+    <!-- Shop Modal Overlay -->
+    <div id="shopModal" class="hidden absolute inset-0 bg-black/65 backdrop-blur-sm flex justify-center items-center p-4 z-40">
+        <div class="bg-blue-950 border-4 border-[#FFD700] rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            <!-- Modal Header -->
+            <div class="bg-[#0033A0] text-white p-4 border-b-2 border-[#FFD700] flex justify-between items-center shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🛒</span>
+                    <h2 class="text-xl font-black text-[#FFD700] tracking-wide">LA TIENDA XENEIZE</h2>
+                </div>
+                <button onclick="toggleShop()" class="bg-red-600 hover:bg-red-700 text-white font-black px-3 py-1 rounded-lg border border-[#FFD700]/50 active:scale-90 cursor-pointer transition-all">
+                    X
+                </button>
+            </div>
+
+            <!-- Tab Headers -->
+            <div class="flex border-b border-[#FFD700]/30 text-center text-xs font-bold leading-none shrink-0">
+                <button onclick="switchTab('mejoras')" id="tab-mejoras" class="flex-1 py-3 text-[#FFD700] bg-[#0033A0]/50 border-r border-[#FFD700]/20 font-black cursor-pointer transition-colors duration-150">
+                    🥇 MEJORAS
+                </button>
+                <button onclick="switchTab('ayudantes')" id="tab-ayudantes" class="flex-1 py-3 text-white hover:text-[#FFD700] border-r border-[#FFD700]/20 font-black cursor-pointer transition-colors duration-150">
+                    🧑‍🍳 AYUDANTES
+                </button>
+                <button onclick="switchTab('consumibles')" id="tab-consumibles" class="flex-1 py-3 text-white hover:text-[#FFD700] font-black cursor-pointer transition-colors duration-150">
+                    🍾 CONSUMIBLES
+                </button>
+            </div>
+
+            <!-- Shop Items List -->
+            <div class="flex-1 overflow-y-auto shop-scroll p-4 space-y-3 bg-[#000c25]">
+                
+                <!-- Category: Mejoras -->
+                <div id="cat-mejoras" class="space-y-3">
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🔪 Cuchillo Xeneize</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Faenado instantáneo y daño mejorado.</p>
+                        </div>
+                        <button id="buy-cuchillo" onclick="buyItem('cuchillo', 50)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $50
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🔥 Parrilla Bombonera</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Cocina los bifes el doble de rápido.</p>
+                        </div>
+                        <button id="buy-parrilla" onclick="buyItem('parrilla', 120)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $120
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🎺 Hinchada del Xeneize</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Grito de "¡BOO!" mata todas las vacas cada 30s.</p>
+                        </div>
+                        <button id="buy-hinchada" onclick="buyItem('hinchada', 350)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $350
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🐄 Feedlot Extendido (4 Vacas)</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Aumenta el límite a 4 vacas en corral.</p>
+                        </div>
+                        <button id="buy-feedlot4" onclick="buyItem('feedlot4', 150)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $150
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🏟️ Mega Feedlot (6 Vacas)</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Aumenta el límite a 6 vacas en corral.</p>
+                        </div>
+                        <button id="buy-feedlot6" onclick="buyItem('feedlot6', 300)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $300
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">👕 Camiseta de Tévez con Sangre</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Habilita vacas de oro que rinden triple carne!</p>
+                        </div>
+                        <button id="buy-camiseta" onclick="buyItem('camiseta', 500)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $500
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Category: Ayudantes -->
+                <div id="cat-ayudantes" class="hidden space-y-3">
+                    <p class="text-[#FFD700]/70 text-[10px] font-mono select-none">Aparecen en el mapa cocinando, vendiendo y juntando por vos.</p>
+                    
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🧑‍🦱 Faenador Ayudante</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Faena automáticamente una vaca cada 15s.</p>
+                        </div>
+                        <button id="buy-h-faenador" onclick="buyItem('h-faenador', 200)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $200
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🚶‍♂️ Juntador de Bifes</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Recolecta carne del suelo automáticamente cada 5s.</p>
+                        </div>
+                        <button id="buy-h-juntador" onclick="buyItem('h-juntador', 150)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $150
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">👨‍🍳 Parrillero Práctico</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Coloca carne cruda y retira el asado listo al instante.</p>
+                        </div>
+                        <button id="buy-h-parrillero" onclick="buyItem('h-parrillero', 180)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $180
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🧑‍💼 Vendedor de Kiosko</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Vende todo el asado disponible cada 10s.</p>
+                        </div>
+                        <button id="buy-h-vendedor" onclick="buyItem('h-vendedor', 160)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $160
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Category: Consumibles -->
+                <div id="cat-consumibles" class="hidden space-y-3">
+                    <p class="text-green-400 text-xs font-black">Efectos inmediatos con risas garantizadas.</p>
+                    
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🍾 Fernandito Energizante</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Velocidad 2x por 20s, Maxi camina tambaleando!</p>
+                        </div>
+                        <button onclick="buyConsumable('fernet', 30)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $30
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-blue-900/60 p-3 rounded-xl border border-[#FFD700]/20">
+                        <div>
+                            <h3 class="text-[#FFD700] font-black text-sm">🍺 Joda con Ricky Centurión</h3>
+                            <p class="text-white/80 text-xs mt-0.5">Ningún beneficio! Resaca y lentitud por 15s.</p>
+                        </div>
+                        <button onclick="buyConsumable('ricky', 150)" class="bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all">
+                            $150
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer Stats Info -->
+            <div class="bg-blue-950 p-4 border-t border-[#FFD700]/30 shrink-0 text-center flex justify-between items-center text-xs text-white">
+                <span class="font-bold">Monedas: <span class="text-yellow-400 id-coins">$0</span></span>
+                <button onclick="resetGameSave()" class="text-red-400 hover:text-red-600 underline text-[10px] font-mono cursor-pointer transition-colors border-0 bg-transparent">
+                    Borrar Partida 🗑️
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Virtual Joystick / D-PAD -->
+    <div id="dpad" class="hidden absolute bottom-24 left-6 p-2 flex flex-col items-center gap-1 opacity-80 pointer-events-auto z-30 select-none">
+        <button id="dpad-up" class="w-14 h-14 bg-blue-900/90 border-2 border-[#FFD700] text-[#FFD700] text-xl font-bold rounded-xl active:scale-90 select-none transition-transform pointer-events-auto shadow-md">▲</button>
+        <div class="flex gap-1">
+            <button id="dpad-left" class="w-14 h-14 bg-blue-900/90 border-2 border-[#FFD700] text-[#FFD700] text-xl font-bold rounded-xl active:scale-90 select-none transition-transform pointer-events-auto shadow-md">◀</button>
+            <div class="w-14 h-14 bg-transparent"></div>
+            <button id="dpad-right" class="w-14 h-14 bg-blue-900/90 border-2 border-[#FFD700] text-[#FFD700] text-xl font-bold rounded-xl active:scale-90 select-none transition-transform pointer-events-auto shadow-md">▶</button>
+        </div>
+        <button id="dpad-down" class="w-14 h-14 bg-blue-900/90 border-2 border-[#FFD700] text-[#FFD700] text-xl font-bold rounded-xl active:scale-90 select-none transition-transform pointer-events-auto shadow-md">▼</button>
+    </div>
+
+    <!-- Web Audio API Custom Sounds -->
+    <script>
+        const soundEngine = {
+            ctx: null,
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            },
+            playMoo() {
+                this.init();
+                const now = this.ctx.currentTime;
+                
+                const osc1 = this.ctx.createOscillator();
+                const osc2 = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+                
+                osc1.type = "sawtooth";
+                osc2.type = "triangle";
+                
+                osc1.frequency.setValueAtTime(105, now);
+                osc1.frequency.linearRampToValueAtTime(80, now + 0.6);
+                
+                osc2.frequency.setValueAtTime(107, now);
+                osc2.frequency.linearRampToValueAtTime(82, now + 0.6);
+                
+                filter.type = "lowpass";
+                filter.frequency.setValueAtTime(320, now);
+                filter.Q.setValueAtTime(4, now);
+                
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                
+                osc1.connect(filter);
+                osc2.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 0.61);
+                osc2.stop(now + 0.61);
+            },
+            playGoldenMoo() {
+                this.init();
+                const now = this.ctx.currentTime;
+                // Sparkly intro
+                for (let i = 0; i < 4; i++) {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(1200 + (i * 300), now + (i * 0.04));
+                    gain.gain.setValueAtTime(0.06, now + (i * 0.04));
+                    gain.gain.exponentialRampToValueAtTime(0.005, now + (i * 0.04) + 0.12);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + (i * 0.04));
+                    osc.stop(now + (i * 0.04) + 0.12);
+                }
+                this.playMoo();
+            },
+            playSlaughter() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.type = "sawtooth";
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.22);
+                
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.23);
+            },
+            playCoin() {
+                this.init();
+                const now = this.ctx.currentTime;
+                [950, 1400].forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(freq, now + (idx * 0.07));
+                    gain.gain.setValueAtTime(0.12, now + (idx * 0.07));
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + (idx * 0.07) + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + (idx * 0.07));
+                    osc.stop(now + (idx * 0.07) + 0.15);
+                });
+            },
+            playBuy() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const notes = [261.63, 329.63, 392.00, 523.25]; // Arpeggio C6
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = "sine";
+                    osc.frequency.setValueAtTime(freq, now + (idx * 0.06));
+                    gain.gain.setValueAtTime(0.15, now + (idx * 0.06));
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + (idx * 0.06) + 0.2);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + (idx * 0.06));
+                    osc.stop(now + (idx * 0.06) + 0.2);
+                });
+            },
+            playBocaChant() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                // Low rumbling crowd horn sound
+                osc.type = "sawtooth";
+                osc.frequency.setValueAtTime(90, now);
+                osc.frequency.linearRampToValueAtTime(70, now + 1.2);
+                
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.25);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 1.25);
+            }
+        };
+    </script>
+
+    <!-- Main Game Logic Execution Script -->
+    <script>
+        // Core game parameters & Reactive State
+        const state = {
+            coins: 0,
+            rawMeat: 0,
+            cookedMeat: 0,
+            maxCows: 2,
+            hasGoldenCowUpgrade: false,
+            grillSpeedMultiplier: 1, // 2x with parrilla bombonera
+            clickKillDamage: 1,      // Faster with Cuchillo Xeneize
+            hinchadaBocaUnlock: false, // automatic killings
+            helpers: {
+                faenador: false,
+                juntador: false,
+                parrillero: false,
+                vendedor: false
+            },
+            boostTimer: 0, // Fernandito
+            hangoverTimer: 0, // Ricky Centurion Hangover
+            currentCategory: 'mejoras'
+        };
+
+        // DOM elements
+        const coinCounter = document.getElementById("coinCounter");
+        const rawCounter = document.getElementById("rawCounter");
+        const cookedCounter = document.getElementById("cookedCounter");
+        const statusBubble = document.getElementById("statusBubble");
+        const redFlash = document.getElementById("redFlash");
+        const boostOverlay = document.getElementById("boostOverlay");
+        const blurOverlay = document.getElementById("blurOverlay");
+        const timerContainer = document.getElementById("timerContainer");
+        const fernanditoTimer = document.getElementById("fernanditoTimer");
+        const resacaTimer = document.getElementById("resacaTimer");
+        const boostTimeLeft = document.getElementById("boostTimeLeft");
+        const resacaTimeLeft = document.getElementById("resacaTimeLeft");
+        const dpad = document.getElementById("dpad");
+
+        // Load Game on Boot
+        function loadOrCreateSave() {
+            const save = localStorage.getItem("maxi_bostero_savegame");
+            if (save) {
+                try {
+                    const data = JSON.parse(save);
+                    state.coins = data.coins ?? 0;
+                    state.rawMeat = data.rawMeat ?? 0;
+                    state.cookedMeat = data.cookedMeat ?? 0;
+                    state.maxCows = data.maxCows ?? 2;
+                    state.hasGoldenCowUpgrade = data.hasGoldenCowUpgrade ?? false;
+                    state.grillSpeedMultiplier = data.grillSpeedMultiplier ?? 1;
+                    state.clickKillDamage = data.clickKillDamage ?? 1;
+                    state.hinchadaBocaUnlock = data.hinchadaBocaUnlock ?? false;
+                    state.helpers = data.helpers ?? { faenador: false, juntador: false, parrillero: false, vendedor: false };
+                } catch (e) {
+                    console.error("Savegame corrompido", e);
+                }
+            }
+            updateHUD();
+            updateShopButtons();
+        }
+
+        function saveGame() {
+            localStorage.setItem("maxi_bostero_savegame", JSON.stringify({
+                coins: state.coins,
+                rawMeat: state.rawMeat,
+                cookedMeat: state.cookedMeat,
+                maxCows: state.maxCows,
+                hasGoldenCowUpgrade: state.hasGoldenCowUpgrade,
+                grillSpeedMultiplier: state.grillSpeedMultiplier,
+                clickKillDamage: state.clickKillDamage,
+                hinchadaBocaUnlock: state.hinchadaBocaUnlock,
+                helpers: state.helpers
+            }));
+        }
+
+        function resetGameSave() {
+            if (confirm("¿Estás seguro que querés reiniciar de cero tu imperio bostero?")) {
+                localStorage.removeItem("maxi_bostero_savegame");
+                location.reload();
+            }
+        }
+
+        function updateHUD() {
+            coinCounter.innerText = `$${state.coins}`;
+            rawCounter.innerText = state.rawMeat;
+            cookedCounter.innerText = state.cookedMeat;
+            document.querySelectorAll(".id-coins").forEach(el => el.innerText = `$${state.coins}`);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById("toastAlert");
+            toast.innerText = msg;
+            toast.classList.remove("opacity-0", "scale-90");
+            toast.classList.add("opacity-100", "scale-100");
+            setTimeout(() => {
+                toast.classList.add("opacity-0", "scale-90");
+                toast.classList.remove("opacity-100", "scale-100");
+            }, 3000);
+        }
+
+        function triggerRedFlash() {
+            redFlash.style.opacity = "0.5";
+            setTimeout(() => { redFlash.style.opacity = "0"; }, 200);
+        }
+
+        function setStatusBubble(msg) {
+            statusBubble.innerText = msg;
+            // quick pop scale animation
+            statusBubble.classList.add("scale-105");
+            setTimeout(() => statusBubble.classList.remove("scale-105"), 150);
+        }
+
+        // Shop Overlay Trigger
+        let isShopOpen = false;
+        function toggleShop() {
+            const modal = document.getElementById("shopModal");
+            isShopOpen = !isShopOpen;
+            if (isShopOpen) {
+                modal.classList.remove("hidden");
+                updateShopButtons();
+            } else {
+                modal.classList.add("hidden");
+            }
+        }
+
+        window.addEventListener("keydown", (e) => {
+            if (e.key.toLowerCase() === 'e') {
+                toggleShop();
+            }
+        });
+
+        // Shop Navigation Tab Mechanism
+        function switchTab(cat) {
+            state.currentCategory = cat;
+            document.getElementById("cat-mejoras").classList.add("hidden");
+            document.getElementById("cat-ayudantes").classList.add("hidden");
+            document.getElementById("cat-consumibles").classList.add("hidden");
+            
+            document.getElementById(`cat-${cat}`).classList.remove("hidden");
+            
+            document.getElementById("tab-mejoras").className = "flex-1 py-3 text-white border-r border-[#FFD700]/20 font-black cursor-pointer bg-transparent";
+            document.getElementById("tab-ayudantes").className = "flex-1 py-3 text-white border-r border-[#FFD700]/20 font-black cursor-pointer bg-transparent";
+            document.getElementById("tab-consumibles").className = "flex-1 py-3 text-white font-black cursor-pointer bg-transparent";
+            
+            const activeTab = document.getElementById(`tab-${cat}`);
+            activeTab.className = "flex-1 py-3 text-[#FFD700] bg-[#0033A0]/50 border-r border-[#FFD700]/20 font-black cursor-pointer";
+        }
+
+        // Shop Purchases
+        function buyItem(item, price) {
+            if (state.coins < price) {
+                showToast("¡No te alcanza, che! ¡Seguí laburando!");
+                return;
+            }
+
+            let success = false;
+            if (item === 'cuchillo' && state.clickKillDamage === 1) {
+                state.clickKillDamage = 2; // Double damage/speed clicks
+                success = true;
+            } else if (item === 'parrilla' && state.grillSpeedMultiplier === 1) {
+                state.grillSpeedMultiplier = 2; // cooks in 5s instead of 10s
+                success = true;
+            } else if (item === 'hinchada' && !state.hinchadaBocaUnlock) {
+                state.hinchadaBocaUnlock = true;
+                success = true;
+            } else if (item === 'feedlot4' && state.maxCows === 2) {
+                state.maxCows = 4;
+                success = true;
+            } else if (item === 'feedlot6' && state.maxCows === 4) {
+                state.maxCows = 6;
+                success = true;
+            } else if (item === 'camiseta' && !state.hasGoldenCowUpgrade) {
+                state.hasGoldenCowUpgrade = true;
+                success = true;
+            }
+            // Helpers
+            else if (item.startsWith('h-')) {
+                const helperKey = item.substring(2);
+                if (!state.helpers[helperKey]) {
+                    state.helpers[helperKey] = true;
+                    success = true;
+                    // Dynamically spawn helper in the scene
+                    spawnHelperInScene(helperKey);
+                } else {
+                    showToast("¡Ya compraste este ayudante, no te abuses!");
+                }
+            }
+
+            if (success) {
+                state.coins -= price;
+                soundEngine.playBuy();
+                saveGame();
+                updateHUD();
+                updateShopButtons();
+                setStatusBubble(`¡Compraste ${item.toUpperCase()}! Copado, papá.`);
+                showToast("¡Compra exitosa! Refrescando asado.");
+            } else {
+                showToast("¡Ya tenés esta mejora o asado completo!");
+            }
+        }
+
+        function buyConsumable(item, price) {
+            if (state.coins < price) {
+                showToast("No te alcanzan las monedas. ¡Seguí vendiendo!");
+                return;
+            }
+
+            state.coins -= price;
+            soundEngine.playBuy();
+            updateHUD();
+
+            if (item === 'fernet') {
+                state.boostTimer = 20; // 20 seconds speed bootst
+                boostOverlay.style.opacity = "1";
+                timerContainer.classList.remove("hidden");
+                fernanditoTimer.classList.remove("hidden");
+                setStatusBubble("¡¡Uuuh loquísimo!! ¡Altisima fafa, Maxi vuela en la cancha!");
+                showToast("¡Fernet activado! ¡Velocidad 2x!");
+            } else if (item === 'ricky') {
+                state.hangoverTimer = 15; // 15 seconds hangover slowing
+                document.body.classList.add("resaca-blur");
+                blurOverlay.style.opacity = "1";
+                timerContainer.classList.remove("hidden");
+                resacaTimer.classList.remove("hidden");
+                setStatusBubble("Maxi y Centurión volvieron re mareados de la joda... 🍺😵");
+                showToast("Ricky Centurión se la pegó en la pera. Maxi tiene resaca.");
+            }
+            toggleShop();
+        }
+
+        function updateShopButtons() {
+            // Improvements Buttons check
+            const updateBtn = (id, conditionsPassed) => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    if (conditionsPassed) {
+                        btn.className = "bg-gray-700 text-white font-extrabold text-xs px-4 py-2 rounded-lg cursor-not-allowed";
+                        btn.innerText = "ADQUIRIDO";
+                    }
+                }
+            };
+
+            updateBtn("buy-cuchillo", state.clickKillDamage > 1);
+            updateBtn("buy-parrilla", state.grillSpeedMultiplier > 1);
+            updateBtn("buy-hinchada", state.hinchadaBocaUnlock);
+            updateBtn("buy-feedlot4", state.maxCows >= 4);
+            updateBtn("buy-feedlot6", state.maxCows >= 6);
+            updateBtn("buy-camiseta", state.hasGoldenCowUpgrade);
+
+            updateBtn("buy-h-faenador", state.helpers.faenador);
+            updateBtn("buy-h-juntador", state.helpers.juntador);
+            updateBtn("buy-h-parrillero", state.helpers.parrillero);
+            updateBtn("buy-h-vendedor", state.helpers.vendedor);
+
+            // Toggle feedlot upgrade 6 based on 4
+            const block6 = document.getElementById("buy-feedlot6");
+            if (block6 && state.maxCows < 4) {
+                block6.className = "bg-blue-900/40 text-yellow-600/50 font-extrabold text-xs px-4 py-2 rounded-lg cursor-not-allowed border border-[#FFD700]/10";
+                block6.innerText = "Nivel 4 requerido";
+            } else if (block6 && state.maxCows >= 6) {
+                block6.className = "bg-gray-700 text-white font-extrabold text-xs px-4 py-2 rounded-lg cursor-not-allowed";
+                block6.innerText = "ADQUIRIDO";
+            } else if (block6 && state.maxCows === 4) {
+                block6.className = "bg-[#FFD700] text-blue-900 font-extrabold text-xs px-4 py-2 rounded-lg border-2 border-blue-950 hover:bg-yellow-400 active:scale-95 transition-all cursor-pointer";
+                block6.innerText = "$300";
+            }
+        }
+
+        // On-screen D-PAD check
+        if (window.innerWidth < 600) {
+            dpad.classList.remove("hidden");
+        }
+        window.addEventListener("resize", () => {
+            if (window.innerWidth < 600) {
+                dpad.classList.remove("hidden");
+            } else {
+                dpad.classList.add("hidden");
+            }
+        });
+
+        // Floaty text trigger helper
+        function spawnFloatText(text, pos3D) {
+            // Project 3D vector to 2D screen coordinate
+            const vector = pos3D.clone();
+            vector.project(camera);
+            
+            const x = (vector.x *  .5 + .5) * window.innerWidth;
+            const y = (vector.y * -.5 + .5) * window.innerHeight;
+            
+            const div = document.createElement("div");
+            div.className = "absolute float-text text-[#FFD700] font-black pointer-events-none drop-shadow-[0_2px_4px_rgba(0,0,0,1)] text-2xl z-40 transform -translate-x-1/2 -translate-y-1/2";
+            div.style.left = `${x}px`;
+            div.style.top = `${y}px`;
+            div.innerText = text;
+            
+            document.body.appendChild(div);
+            
+            setTimeout(() => {
+                div.remove();
+            }, 1200);
+        }
+    </script>
+
+    <!-- Canvas Render Space -->
+    <div id="gameContainer" class="w-full h-full"></div>
+
+    <!-- Three.js Engine Script setup -->
+    <script>
+        let scene, camera, renderer, clock;
+        let mainScriptRunning = false;
+
+        // Player Maxi mesh
+        let maxiMesh;
+        const playerSpeed = 8;
+        const keysPressed = { w: false, a: false, s: false, d: false };
+
+        // Lists for game elements
+        const cows = [];
+        const meatChunks = [];
+        const activeHelperMeshes = {};
+        const raycaster = new THREE.Raycaster();
+        const clickCoord = new THREE.Vector2();
+
+        // Grill positions and status
+        // Coordinates for grid-slots on grill top
+        const grillSlots = [
+            { id: 0, model: null, type: 'raw', timer: 0.0, worldPos: new THREE.Vector3(5.4, 0.95, -5.4), active: false },
+            { id: 1, model: null, type: 'raw', timer: 0.0, worldPos: new THREE.Vector3(6.6, 0.95, -5.4), active: false },
+            { id: 2, model: null, type: 'raw', timer: 0.0, worldPos: new THREE.Vector3(5.4, 0.95, -4.2), active: false },
+            { id: 3, model: null, type: 'raw', timer: 0.0, worldPos: new THREE.Vector3(6.6, 0.95, -4.2), active: false }
+        ];
+
+        // Particle particle system pool
+        const particlePool = [];
+
+        // Setup boundary constraints
+        const feedlotBounds = { minX: -24, maxX: -7, minZ: 0, maxZ: 14 };
+
+        // Timers for automated triggers
+        let feedlotSpawnTimer = 0;
+        let autoHinchadaTimer = 0;
+        let helperFaenadorTimer = 0;
+        let helperJuntadorTimer = 0;
+        let helperVendedorTimer = 0;
+
+        function startGameEngine() {
+            // Dismiss welcome screen
+            const welcome = document.getElementById("welcomeScreen");
+            welcome.style.opacity = "0";
+            setTimeout(() => { welcome.remove(); }, 300);
+
+            // Activate Audio context
+            soundEngine.init();
+
+            // Run normal Three.js initialization
+            if (!mainScriptRunning) {
+                initEngine();
+                animate();
+                mainScriptRunning = true;
+                soundEngine.playCoin();
+            }
+        }
+
+        function initEngine() {
+            const container = document.getElementById("gameContainer");
+            
+            // Webgl Renderer with Shadow Support
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.setClearColor(0x87CEEB); // Sky Blue
+            container.appendChild(renderer.domElement);
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x87CEEB, 0.008);
+
+            clock = new THREE.Clock();
+
+            // Isometric Orthographic Camera setup
+            const aspect = window.innerWidth / window.innerHeight;
+            const viewSize = 18;
+            camera = new THREE.OrthographicCamera(
+                -viewSize * aspect, viewSize * aspect,
+                viewSize, -viewSize,
+                0.1, 1000
+            );
+            // Camera position relative to lookAt
+            camera.position.set(28, 25, 28);
+            camera.lookAt(0, 0, 0);
+
+            // Lighting setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+            scene.add(ambientLight);
+
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.3);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfffcfa, 0.9);
+            dirLight.position.set(15, 35, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.left = -25;
+            dirLight.shadow.camera.right = 25;
+            dirLight.shadow.camera.top = 25;
+            dirLight.shadow.camera.bottom = -25;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 100;
+            dirLight.shadow.bias = -0.001;
+            scene.add(dirLight);
+
+            // Build Isometric Map
+            createWorldMap();
+
+            // Create Player Maxi
+            spawnMaxi();
+
+            // Load Game stats
+            loadOrCreateSave();
+
+            // Populate existing cows initially
+            spawnNewCowInFeedlot();
+            spawnNewCowInFeedlot();
+
+            // Re-spawn purchased helpers inside the viewport
+            for (let helpKey in state.helpers) {
+                if (state.helpers[helpKey]) {
+                    spawnHelperInScene(helpKey);
+                }
+            }
+
+            // Keyboard binds
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+            
+            // Mouse/Touch click to faenar cows
+            window.addEventListener('click', handleIntersectionClick);
+
+            // Mobile virtual buttons attach event listeners
+            setupMobileDpad();
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // FENCE & ZONE VISUAL MODEL BUILD
+        function createWorldMap() {
+            // Grass bottom base ground
+            const groundGeo = new THREE.PlaneGeometry(60, 60);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // Grass Green
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Dirt path visuals
+            // Feedlot is around X=-15, Z=5. Parrilla around X=6, Z=-5. Sale Stand around X=16, Z=5.
+            // Create a path plane that connects left/center/right.
+            const pathGeo = new THREE.PlaneGeometry(55, 6);
+            const pathMat = new THREE.MeshLambertMaterial({ color: 0x8B6914 }); // Dirt brown paths
+            const pathCenter = new THREE.Mesh(pathGeo, pathMat);
+            pathCenter.rotation.x = -Math.PI / 2;
+            pathCenter.position.set(0, 0.01, 2);
+            pathCenter.receiveShadow = true;
+            scene.add(pathCenter);
+
+            const pathGrill = new THREE.Mesh(new THREE.PlaneGeometry(6, 15), pathMat);
+            pathGrill.rotation.x = -Math.PI / 2;
+            pathGrill.position.set(6, 0.01, -2);
+            pathGrill.receiveShadow = true;
+            scene.add(pathGrill);
+
+            // Zone 1: FEEDLOT - Fenced corral
+            // Corral boundary corners: minX: -25, maxX: -7, minZ: -1, maxZ: 15
+            // Draw visual wooden posts and bars
+            const fMat = new THREE.MeshLambertMaterial({ color: 0x5C4033 }); // dark wood
+            const postGeo = new THREE.CylinderGeometry(0.18, 0.18, 1.6, 8);
+            
+            // List boundary positions
+            const corners = [
+                {x: -25, z: -1}, {x: -16, z: -1}, {x: -7, z: -1},
+                {x: -7, z: 7}, {x: -7, z: 15}, {x: -16, z: 15},
+                {x: -25, z: 15}, {x: -25, z: 7}
+            ];
+            corners.forEach(pos => {
+                const post = new THREE.Mesh(postGeo, fMat);
+                post.position.set(pos.x, 0.8, pos.z);
+                post.castShadow = true;
+                scene.add(post);
+            });
+
+            // Bars connecting them
+            const bars = [
+                { x: -16, z: -1, sx: 18, sz: 0.15 },
+                { x: -7, z: 7, sx: 0.15, sz: 16 },
+                { x: -16, z: 15, sx: 18, sz: 0.15 },
+                { x: -25, z: 7, sx: 0.15, sz: 16 }
+            ];
+            bars.forEach(b => {
+                const barMeshTop = new THREE.Mesh(new THREE.BoxGeometry(b.sx, 0.15, b.sz), fMat);
+                barMeshTop.position.set(b.x, 1.2, b.z);
+                barMeshTop.castShadow = true;
+                scene.add(barMeshTop);
+
+                const barMeshBottom = new THREE.Mesh(new THREE.BoxGeometry(b.sx, 0.15, b.sz), fMat);
+                barMeshBottom.position.set(b.x, 0.6, b.z);
+                barMeshBottom.castShadow = true;
+                scene.add(barMeshBottom);
+            });
+
+            // Floating Text Labels inside scene for identification
+            const feedlotLabel = createTextSprite("FEEDLOT BOCA", "#FFD700", 1.5);
+            feedlotLabel.position.set(-16, 3, 7);
+            scene.add(feedlotLabel);
+
+            // Zone 3 Center: PARRILLA
+            // Create a gorgeous brick-styled grill
+            const grillGroup = new THREE.Group();
+            grillGroup.position.set(6, 0.0, -5);
+
+            // Main brick base
+            const brickMat = new THREE.MeshLambertMaterial({ color: 0x992211 }); // brick red
+            const parrillaBase = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.9, 2.6), brickMat);
+            parrillaBase.position.y = 0.45;
+            parrillaBase.castShadow = true;
+            parrillaBase.receiveShadow = true;
+            grillGroup.add(parrillaBase);
+
+            // Metallic top grill bars plate
+            const metalMat = new THREE.MeshLambertMaterial({ color: 0x2e2e2e });
+            const grillTop = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.05, 2.2), metalMat);
+            grillTop.position.y = 0.925;
+            grillTop.castShadow = true;
+            grillTop.receiveShadow = true;
+            grillGroup.add(grillTop);
+
+            // Chimney block
+            const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.5, 0.8), brickMat);
+            chimney.position.set(-1.3, 1.25, -0.8);
+            chimney.castShadow = true;
+            grillGroup.add(chimney);
+
+            const smokeCap = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.2, 1.0), metalMat);
+            smokeCap.position.set(-1.3, 2.6, -0.8);
+            grillGroup.add(smokeCap);
+
+            // Side tables
+            const sideWood = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.08, 2.6), fMat);
+            sideWood.position.set(2.2, 0.8, 0);
+            sideWood.castShadow = true;
+            grillGroup.add(sideWood);
+
+            scene.add(grillGroup);
+
+            // Label for Grill
+            const grillLabel = createTextSprite("LA BOMBONERA GRILL", "#FFD700", 1.5);
+            grillLabel.position.set(6, 3, -5);
+            scene.add(grillLabel);
+
+            // Zone 4 Right: SALE STAND (Kiosk)
+            const kioskGroup = new THREE.Group();
+            kioskGroup.position.set(16, 0.0, 5);
+
+            // Main rustic desk table
+            const tableMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // wooden
+            const kioskTable = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.2, 2.0), tableMat);
+            kioskTable.position.y = 0.6;
+            kioskTable.castShadow = true;
+            kioskTable.receiveShadow = true;
+            kioskGroup.add(kioskTable);
+
+            // Thin blue/yellow canopy posts
+            const poleMat = new THREE.MeshLambertMaterial({ color: 0x0033A0 }); // Blue Boca
+            const poles = [
+                {x: -2.0, z: -0.9}, {x: 2.0, z: -0.9},
+                {x: -2.0, z: 0.9}, {x: 2.0, z: 0.9}
+            ];
+            poles.forEach(p => {
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.4, 8), poleMat);
+                pole.position.set(p.x, 1.2, p.z);
+                pole.castShadow = true;
+                kioskGroup.add(pole);
+            });
+
+            // Slanted fabric roof
+            const roofGroup = new THREE.Group();
+            roofGroup.position.set(0, 2.4, 0);
+            
+            const rBlueMat = new THREE.MeshLambertMaterial({ color: 0x0033A0 });
+            const rGoldMat = new THREE.MeshLambertMaterial({ color: 0xFFD700 });
+
+            // Combine blue and yellow stripes for that real Boca feel!
+            for(let xl = -2.25; xl <= 2.25; xl += 0.9) {
+                const colorMat = (Math.abs(xl) < 0.5) ? rGoldMat : rBlueMat;
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.15, 2.4), colorMat);
+                stripe.position.set(xl, 0.05, 0);
+                stripe.rotation.x = 0.12; // slightly tilted forward
+                stripe.castShadow = true;
+                roofGroup.add(stripe);
+            }
+            kioskGroup.add(roofGroup);
+            scene.add(kioskGroup);
+
+            // Sign
+            const kioskLabel = createTextSprite("VENDER ASADO AQUÍ", "#FFD700", 1.5);
+            kioskLabel.position.set(16, 3, 5);
+            scene.add(kioskLabel);
+        }
+
+        // TEXT SPRITE HELPER (Used for naming zones dynamically)
+        function createTextSprite(text, colorHex, scaleMult = 1.0) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 384;
+            canvas.height = 96;
+            const context = canvas.getContext('2d');
+            
+            context.fillStyle = 'rgba(0, 0, 0, 0)';
+            context.fillRect(0, 0, 384, 96);
+            
+            context.font = 'Bold 28px system-ui';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            
+            // shadow text rendering for nice retro pixel stroke
+            context.strokeStyle = 'black';
+            context.lineWidth = 6;
+            context.strokeText(text, 192, 48);
+            
+            context.fillStyle = colorHex;
+            context.fillText(text, 192, 48);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(6 * scaleMult, 1.5 * scaleMult, 1);
+            return sprite;
+        }
+
+        // LOW-POLY MECH MODELS BUILDERS
+        function spawnMaxi() {
+            maxiMesh = new THREE.Group();
+            
+            // Body: noticeably short & fat
+            const bGeo = new THREE.BoxGeometry(1.6, 0.9, 1.4);
+            const bMat = new THREE.MeshLambertMaterial({ color: 0x0033A0 }); // Boca Blue
+            const body = new THREE.Mesh(bGeo, bMat);
+            body.position.y = 0.45;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            maxiMesh.add(body);
+
+            // Boca yellow stripe wrapping the belly
+            const sGeo = new THREE.BoxGeometry(1.64, 0.16, 1.44);
+            const sMat = new THREE.MeshLambertMaterial({ color: 0xFFD700 });
+            const stripe = new THREE.Mesh(sGeo, sMat);
+            stripe.position.y = 0.45;
+            body.add(stripe);
+
+            // Skin Head
+            const hGeo = new THREE.SphereGeometry(0.44, 16, 16);
+            const hMat = new THREE.MeshLambertMaterial({ color: 0xF4A460 }); // skin skin
+            const head = new THREE.Mesh(hGeo, hMat);
+            head.position.y = 1.1;
+            head.castShadow = true;
+            maxiMesh.add(head);
+
+            // Flat white cap on top
+            const cGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.12, 12);
+            const cMat = new THREE.MeshLambertMaterial({ color: 0xFFFFFF }); // white cap
+            const cap = new THREE.Mesh(cGeo, cMat);
+            cap.position.y = 1.48;
+            cap.castShadow = true;
+            maxiMesh.add(cap);
+
+            // Short stubby legs
+            const legGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.4, 8);
+            const pantsMat = new THREE.MeshLambertMaterial({ color: 0x002288 });
+            
+            const leftLeg = new THREE.Mesh(legGeo, pantsMat);
+            leftLeg.position.set(-0.4, 0.2, 0);
+            leftLeg.castShadow = true;
+            maxiMesh.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, pantsMat);
+            rightLeg.position.set(0.4, 0.2, 0);
+            rightLeg.castShadow = true;
+            maxiMesh.add(rightLeg);
+
+            // Position & scale down initially
+            maxiMesh.position.set(0, 0.05, 0);
+            scene.add(maxiMesh);
+        }
+
+        // Cow Spawner
+        function spawnNewCowInFeedlot() {
+            // Check cow limits
+            if (cows.length >= state.maxCows) return;
+
+            const isGolden = state.hasGoldenCowUpgrade && (Math.random() < 0.25);
+
+            const cowGroup = new THREE.Group();
+            cowGroup.name = "vaca_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+
+            // Body
+            const bodyGeo = new THREE.BoxGeometry(1.6, 1.1, 1.0);
+            const bodyMat = new THREE.MeshLambertMaterial({ 
+                color: isGolden ? 0xFFFF00 : 0xFFFFFF,
+                roughness: 0.8
+            });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.95;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            cowGroup.add(body);
+
+            // Add dark flat spots to bovine body sides if NOT golden
+            if (!isGolden) {
+                const spotMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+                for(let i=0; i<3; i++) {
+                    const spot = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.02), spotMat);
+                    spot.position.set(
+                        (Math.random() - 0.5) * 1.0,
+                        (Math.random() - 0.5) * 0.4,
+                        0.51 * (Math.random() > 0.5 ? 1 : -1)
+                    );
+                    body.add(spot);
+                }
+            }
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
+            const head = new THREE.Mesh(headGeo, bodyMat);
+            head.position.set(1.0, 1.3, 0);
+            head.castShadow = true;
+            cowGroup.add(head);
+
+            // Mouth
+            const mouthMat = new THREE.MeshLambertMaterial({ color: isGolden ? 0xFFBB00 : 0xFFC0CB }); // pink snout
+            const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.6), mouthMat);
+            mouth.position.set(1.4, 1.15, 0);
+            cowGroup.add(mouth);
+
+            // Horns
+            const hornGeo = new THREE.ConeGeometry(0.08, 0.35, 8);
+            const hornMat = new THREE.MeshLambertMaterial({ color: 0xDDDDDD });
+            
+            const lHorn = new THREE.Mesh(hornGeo, hornMat);
+            lHorn.position.set(0.9, 1.7, -0.22);
+            lHorn.rotation.z = -0.15;
+            cowGroup.add(lHorn);
+
+            const rHorn = new THREE.Mesh(hornGeo, hornMat);
+            rHorn.position.set(0.9, 1.7, 0.22);
+            rHorn.rotation.z = -0.15;
+            cowGroup.add(rHorn);
+
+            // Cylinder Legs (4x)
+            const legGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.6, 8);
+            const legMat = new THREE.MeshLambertMaterial({ color: isGolden ? 0xDD9900 : 0xf0f0f0 });
+            const offsets = [
+                {x:-0.5, z:-0.3}, {x:-0.5, z:0.3},
+                {x:0.5, z:-0.3}, {x:0.5, z:0.3}
+            ];
+            offsets.forEach(off => {
+                const leg = new THREE.Mesh(legGeo, legMat);
+                leg.position.set(off.x, 0.3, off.z);
+                leg.castShadow = true;
+                cowGroup.add(leg);
+            });
+
+            // Golden Halo for golden cows 
+            if (isGolden) {
+                const torGeo = new THREE.TorusGeometry(0.35, 0.05, 8, 24);
+                const torMat = new THREE.MeshBasicMaterial({ color: 0xFFFF55 });
+                const halo = new THREE.Mesh(torGeo, torMat);
+                halo.position.set(1.0, 2.0, 0);
+                halo.rotation.x = Math.PI/2;
+                cowGroup.add(halo);
+            }
+
+            // Random initial roaming position inside feeding lot corral bounds
+            const rx = feedlotBounds.minX + Math.random() * (feedlotBounds.maxX - feedlotBounds.minX);
+            const rz = feedlotBounds.minZ + Math.random() * (feedlotBounds.maxZ - feedlotBounds.minZ);
+            cowGroup.position.set(rx, 0, rz);
+
+            scene.add(cowGroup);
+
+            // Store metadata
+            cows.push({
+                mesh: cowGroup,
+                isGolden: isGolden,
+                targetX: rx,
+                targetZ: rz,
+                moveTimer: Math.random() * 2,
+                walkSpeed: 1.4 + Math.random() * 1.5,
+                bobPhase: Math.random() * 20
+            });
+            
+            if (isGolden) {
+                soundEngine.playGoldenMoo();
+            } else {
+                soundEngine.playMoo();
+            }
+        }
+
+        // SPAWNING HELPERS IN SCENE
+        function spawnHelperInScene(type) {
+            // Already created? Avoid duplication
+            if (activeHelperMeshes[type]) {
+                scene.remove(activeHelperMeshes[type]);
+            }
+
+            const hGroup = new THREE.Group();
+            
+            // Skin Head
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 12), new THREE.MeshLambertMaterial({ color: 0xF4A460 }));
+            head.position.y = 1.0;
+            head.castShadow = true;
+            hGroup.add(head);
+
+            // Body
+            let bodyColor = 0xCCCCCC;
+            if (type === 'faenador') bodyColor = 0xd97706; // Apron / brown shirt
+            if (type === 'juntador') bodyColor = 0x16a34a; // Green helper
+            if (type === 'parrillero') bodyColor = 0xffffff; // White chef
+            if (type === 'vendedor') bodyColor = 0xeab308; // Yellow sales
+            
+            const bGeo = new THREE.BoxGeometry(0.7, 0.7, 0.6);
+            const bMat = new THREE.MeshLambertMaterial({ color: bodyColor });
+            const body = new THREE.Mesh(bGeo, bMat);
+            body.position.y = 0.55;
+            body.castShadow = true;
+            hGroup.add(body);
+
+            // Legs
+            const legGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.35, 8);
+            const legMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+            const lLeg = new THREE.Mesh(legGeo, legMat);
+            lLeg.position.set(-0.2, 0.175, 0);
+            hGroup.add(lLeg);
+            const rLeg = new THREE.Mesh(legGeo, legMat);
+            rLeg.position.set(0.2, 0.175, 0);
+            hGroup.add(rLeg);
+
+            // Accessories based on skills
+            if (type === 'parrillero') {
+                // Chef Hat cylinder
+                const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.35, 12), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+                hat.position.set(0, 1.35, 0);
+                hGroup.add(hat);
+            }
+
+            // Fixed Position posts depending on jobs
+            if (type === 'faenador') hGroup.position.set(-5, 0, 7);
+            if (type === 'juntador') hGroup.position.set(-3, 0, -1);
+            if (type === 'parrillero') hGroup.position.set(8.5, 0, -4.6);
+            if (type === 'vendedor') hGroup.position.set(16, 0.05, 4.0);
+
+            scene.add(hGroup);
+            activeHelperMeshes[type] = hGroup;
+        }
+
+        // PARTICLES EMISSION ENGINE POOL
+        function spawnBloodBurstParticles(position, count = 25) {
+            for (let i = 0; i < count; i++) {
+                const geo = new THREE.SphereGeometry(0.08 + Math.random() * 0.1, 4, 4);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xB22222 }); // Blood dark crimson red
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(position);
+                mesh.position.y += 0.4;
+                scene.add(mesh);
+
+                const angle = Math.random() * Math.PI * 2;
+                const force = 1.5 + Math.random() * 3.5;
+                const vx = Math.cos(angle) * force;
+                const vy = 3.5 + Math.random() * 4.5; // upwards thrust
+                const vz = Math.sin(angle) * force;
+
+                particlePool.push({
+                    mesh: mesh,
+                    vx: vx,
+                    vy: vy,
+                    vz: vz,
+                    life: 1.5,
+                    maxLife: 1.5,
+                    type: 'blood'
+                });
+            }
+        }
+
+        function emitFireParticle() {
+            // Spawn fire under the grill surface (X=6, Z=-5, Y=0.35)
+            const geo = new THREE.SphereGeometry(0.06 + Math.random() * 0.08, 4, 4);
+            const mat = new THREE.MeshBasicMaterial({ 
+                color: Math.random() > 0.42 ? 0xFF4500 : 0xFFD700, // orange & yellow fire embers
+                transparent: true,
+                opacity: 0.8
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(6.0 + (Math.random() - 0.5) * 2.8, 0.3, -5.0 + (Math.random() - 0.5) * 1.8);
+            scene.add(mesh);
+
+            particlePool.push({
+                mesh: mesh,
+                vx: (Math.random() - 0.5) * 0.35,
+                vy: 0.85 + Math.random() * 0.95, // float upwards
+                vz: (Math.random() - 0.5) * 0.35,
+                life: 0.65,
+                maxLife: 0.65,
+                type: 'fire'
+            });
+        }
+
+        function emitSteamParticle(x, z) {
+            const geo = new THREE.SphereGeometry(0.11 + Math.random() * 0.12, 6, 6);
+            const mat = new THREE.MeshBasicMaterial({ 
+                color: 0xEEFFFF, // steam mist white/blueish
+                transparent: true,
+                opacity: 0.35
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x + (Math.random()-0.5)*0.3, 1.05, z + (Math.random()-0.5)*0.3);
+            scene.add(mesh);
+
+            particlePool.push({
+                mesh: mesh,
+                vx: (Math.random() - 0.5) * 0.2,
+                vy: 0.45 + Math.random() * 0.45, // slow float
+                vz: -0.15 - Math.random() * 0.25, // drifts slightly back
+                life: 0.95,
+                maxLife: 0.95,
+                type: 'smoke'
+            });
+        }
+
+        // SLUGHTER / COW SLAUGHTER ENGINE
+        function slaughterCow(cowObj) {
+            const pos = cowObj.mesh.position.clone();
+            const isGold = cowObj.isGolden;
+
+            // Remove mesh instantly
+            scene.remove(cowObj.mesh);
+            
+            // Delete from data structures
+            const idx = cows.findIndex(c => c.mesh.name === cowObj.mesh.name);
+            if (idx > -1) cows.splice(idx, 1);
+
+            // Blood Splash burst
+            spawnBloodBurstParticles(pos, isGold ? 45 : 25);
+
+            // Screen damage splash
+            triggerRedFlash();
+
+            // Sound
+            if (isGold) {
+                soundEngine.playCoin();
+            } else {
+                soundEngine.playSlaughter();
+            }
+
+            // Spawn Raw meat drops as ground meshes at coordinates
+            const meatCount = isGold ? 8 : (2 + Math.floor(Math.random() * 2)); // 2 to 3 chunks of beef
+            dropBovineMeatToGround(pos, meatCount);
+
+            // Spawn cash text popups
+            spawnFloatText(isGold ? "🏆 CARNE ORO" : "🥩 CARNE!", pos);
+            setStatusBubble(isGold ? "¡Che! ¡Faenaste una Vaca Bostera de Oro de Tevez! ¡Rinde triple!" : "¡Metíle bife! Carne fresca cayendo!");
+
+            // Trigger asynchronous respawn schedule
+            setTimeout(() => {
+                spawnNewCowInFeedlot();
+            }, 3000 + Math.random() * 4000);
+        }
+
+        function dropBovineMeatToGround(originPos, count) {
+            for(let i=0; i<count; i++) {
+                // Irregular meat geometry
+                const geo = new THREE.BoxGeometry(0.48 + Math.random()*0.1, 0.2, 0.32 + Math.random()*0.08);
+                const mat = new THREE.MeshLambertMaterial({ color: 0x800000 }); // Raw Crimson
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                // Land spread dispersion
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 0.5 + Math.random() * 1.6;
+                mesh.position.set(
+                    originPos.x + Math.cos(angle) * distance,
+                    0.1,
+                    originPos.z + Math.sin(angle) * distance
+                );
+                // Clamp within map bounds
+                mesh.position.x = Math.max(-28, Math.min(28, mesh.position.x));
+                mesh.position.z = Math.max(-28, Math.min(28, mesh.position.z));
+
+                mesh.rotation.y = Math.random() * Math.PI;
+                scene.add(mesh);
+
+                meatChunks.push(mesh);
+            }
+        }
+
+        // SELLING REVENUE POPUP
+        function triggerRevenue(amount, point3D) {
+            state.coins += amount;
+            soundEngine.playCoin();
+            updateHUD();
+            saveGame();
+            spawnFloatText(`+$${amount} 💰`, point3D);
+        }
+
+        // CLICK RAYCASTER INTERSECT
+        function handleIntersectionClick(e) {
+            // Dismiss if shop is open or welcome screens active
+            if (isShopOpen) return;
+
+            // Normalize coordinate
+            clickCoord.x = (e.clientX / window.innerWidth) * 2 - 1;
+            clickCoord.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(clickCoord, camera);
+            
+            // Intersect cows
+            const cowMeshes = cows.map(c => c.mesh);
+            const intersects = raycaster.intersectObjects(cowMeshes, true);
+
+            if (intersects.length > 0) {
+                // Find root group parent name
+                let rootGroup = intersects[0].object;
+                while (rootGroup.parent && rootGroup.parent.type === "Group" && !rootGroup.parent.name.startsWith("vaca_")) {
+                    rootGroup = rootGroup.parent;
+                }
+                if (rootGroup.parent && rootGroup.parent.name.startsWith("vaca_")) {
+                    rootGroup = rootGroup.parent;
+                }
+
+                // Check matches in state cows array
+                const targetCow = cows.find(c => c.mesh.name === rootGroup.name);
+                if (targetCow) {
+                    // Check physical proximity to allow slit action
+                    const dist = maxiMesh.position.distanceTo(targetCow.mesh.position);
+                    if (dist <= 4.2) {
+                        slaughterCow(targetCow);
+                    } else {
+                        setStatusBubble("¡Che, estás re lejos! Acercáte para carnear la vaca.");
+                        showToast("Maxi está muy corto. ¡Ponéte más cerca de la vaca!");
+                    }
+                }
+            } else {
+                // Check if user clicked on static Sale Stand table to sell cooked meat manually
+                // Click coordinate can check manual Sale Stand location (16,0,5)
+                raycaster.setFromCamera(clickCoord, camera);
+                // Simply click closer check: if Maxi walks near table, clicks anywhere can sell cooked food
+                const activeDist = maxiMesh.position.distanceTo(new THREE.Vector3(16, 0, 5));
+                if (activeDist <= 4.5 && state.cookedMeat > 0) {
+                    sellAllCookedMeatManually();
+                }
+            }
+        }
+
+        function sellAllCookedMeatManually() {
+            const soldCount = state.cookedMeat;
+            if (soldCount <= 0) return;
+            const payoff = soldCount * 25; // 25 coins each steak
+            state.cookedMeat = 0;
+            triggerRevenue(payoff, new THREE.Vector3(16, 1.8, 5));
+            setStatusBubble(`¡Qué golazo de Boca! Vendimos un asadito caliente por $${payoff} morlacos!`);
+        }
+
+        // MAIN UPDATE ENGINE LOOP
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = clock.getDelta();
+            
+            // Update mobile countdown timers inside state
+            updateSystemTimers(dt);
+
+            // Player translation
+            updateMaxiMovement(dt);
+
+            // Cows roaming inside fences paddock
+            updateCowsRoaming(dt);
+
+            // Ground Meat proximity grab detection
+            checkMeatChunksProximityGrab();
+
+            // Cooking grill thermal states
+            updateGrillCookingSlots(dt);
+
+            // Automated Helper actions
+            executeHelpersAI(dt);
+
+            // Splash Particle simulations
+            simulateParticles(dt);
+
+            // Smooth Ortho camera tracking
+            if (maxiMesh) {
+                const targetCamX = maxiMesh.position.x + 28;
+                const targetCamZ = maxiMesh.position.z + 28;
+                // smooth lerp follow
+                camera.position.x += (targetCamX - camera.position.x) * 0.08;
+                camera.position.z += (targetCamZ - camera.position.z) * 0.08;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // CLOCK TIMERS SYSTEM
+        function updateSystemTimers(dt) {
+            let updateContainer = false;
+
+            if (state.boostTimer > 0) {
+                state.boostTimer -= dt;
+                boostTimeLeft.innerText = `${Math.ceil(state.boostTimer)}s`;
+                updateContainer = true;
+                if (state.boostTimer <= 0) {
+                    boostOverlay.style.opacity = "0";
+                    fernanditoTimer.classList.add("hidden");
+                }
+            }
+
+            if (state.hangoverTimer > 0) {
+                state.hangoverTimer -= dt;
+                resacaTimeLeft.innerText = `${Math.ceil(state.hangoverTimer)}s`;
+                updateContainer = true;
+                if (state.hangoverTimer <= 0) {
+                    document.body.classList.remove("resaca-blur");
+                    blurOverlay.style.opacity = "0";
+                    resacaTimer.classList.add("hidden");
+                }
+            }
+
+            if (updateContainer) {
+                timerContainer.classList.remove("hidden");
+            } else {
+                timerContainer.classList.add("hidden");
+            }
+        }
+
+        // CONTROLLER TRANSFORMS
+        function handleKeyDown(e) {
+            const key = e.key.toLowerCase();
+            if (key in keysPressed) keysPressed[key] = true;
+        }
+
+        function handleKeyUp(e) {
+            const key = e.key.toLowerCase();
+            if (key in keysPressed) keysPressed[key] = false;
+        }
+
+        function setupMobileDpad() {
+            // Helper function to bind press/release
+            const bindBtn = (id, key) => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                
+                const startFunc = (e) => {
+                    e.preventDefault();
+                    keysPressed[key] = true;
+                };
+                const endFunc = (e) => {
+                    e.preventDefault();
+                    keysPressed[key] = false;
+                };
+                
+                btn.addEventListener('touchstart', startFunc);
+                btn.addEventListener('touchend', endFunc);
+                btn.addEventListener('mousedown', startFunc);
+                btn.addEventListener('mouseup', endFunc);
+                btn.addEventListener('mouseleave', endFunc);
+            };
+
+            bindBtn("dpad-up", 'w');
+            bindBtn("dpad-down", 's');
+            bindBtn("dpad-left", 'a');
+            bindBtn("dpad-right", 'd');
+        }
+
+        function updateMaxiMovement(dt) {
+            if (!maxiMesh) return;
+
+            let moveX = 0;
+            let moveZ = 0;
+
+            if (keysPressed.w) { moveX -= 1; moveZ -= 1; } // Maps diagonally UP
+            if (keysPressed.s) { moveX += 1; moveZ += 1; } // Maps diagonally DOWN
+            if (keysPressed.a) { moveX -= 1; moveZ += 1; } // Maps diagonally LEFT
+            if (keysPressed.d) { moveX += 1; moveZ -= 1; } // Maps diagonally RIGHT
+
+            let targetSpeed = playerSpeed;
+            if (state.boostTimer > 0) targetSpeed *= 2.0;       // speedup!
+            if (state.hangoverTimer > 0) targetSpeed *= 0.5;    // slowed!
+
+            if (moveX !== 0 || moveZ !== 0) {
+                // Normalize speed vector diagonal alignment
+                const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
+                const dx = (moveX / len) * targetSpeed * dt;
+                const dz = (moveZ / len) * targetSpeed * dt;
+
+                // Wobble wobble swaying if Fernandito is active
+                let wobble = 0;
+                if (state.boostTimer > 0) {
+                    wobble = Math.sin(clock.getElapsedTime() * 16) * 0.45;
+                }
+
+                maxiMesh.position.x += dx + wobble * dt;
+                maxiMesh.position.z += dz;
+
+                // Visual bobbing walk cycle animation
+                maxiMesh.position.y = 0.05 + Math.abs(Math.sin(clock.getElapsedTime() * 12)) * 0.28;
+
+                // Character Rotation direction turning face
+                const angle = Math.atan2(-dz, dx);
+                maxiMesh.rotation.y = angle;
+            } else {
+                // Idle breathing sway
+                maxiMesh.position.y = 0.05 + Math.sin(clock.getElapsedTime() * 2) * 0.035;
+                maxiMesh.rotation.z = Math.sin(clock.getElapsedTime() * 1.5) * 0.02;
+            }
+
+            // Map border constraint borders clamp
+            maxiMesh.position.x = Math.max(-28, Math.min(28, maxiMesh.position.x));
+            maxiMesh.position.z = Math.max(-28, Math.min(28, maxiMesh.position.z));
+        }
+
+        // COWS ACTIONS
+        function updateCowsRoaming(dt) {
+            cows.forEach(c => {
+                c.moveTimer -= dt;
+                c.bobPhase += dt * c.walkSpeed * 5;
+
+                // Move towards coordinates
+                const distance = Math.hypot(c.targetX - c.mesh.position.x, c.targetZ - c.mesh.position.z);
+                if (distance > 0.4) {
+                    const dx = (c.targetX - c.mesh.position.x) / distance;
+                    const dz = (c.targetZ - c.mesh.position.z) / distance;
+                    
+                    c.mesh.position.x += dx * c.walkSpeed * dt;
+                    c.mesh.position.z += dz * c.walkSpeed * dt;
+
+                    // Leg articulation bob
+                    c.mesh.rotation.y = Math.atan2(-dz, dx);
+                    // cow head shaking
+                    c.mesh.children[1].rotation.x = Math.sin(c.bobPhase) * 0.08; // slightly swing head
+                }
+
+                // Pick a new coordinate upon arrival, or on timer
+                if (distance <= 0.4 || c.moveTimer <= 0) {
+                    c.targetX = feedlotBounds.minX + Math.random() * (feedlotBounds.maxX - feedlotBounds.minX);
+                    c.targetZ = feedlotBounds.minZ + Math.random() * (feedlotBounds.maxZ - feedlotBounds.minZ);
+                    c.moveTimer = 3.5 + Math.random() * 5.5; // seconds delay
+                }
+            });
+
+            // Handle periodic cows spawner limits checks
+            feedlotSpawnTimer += dt;
+            if (feedlotSpawnTimer >= 5.0) {
+                feedlotSpawnTimer = 0;
+                if (cows.length < state.maxCows) {
+                    spawnNewCowInFeedlot();
+                }
+            }
+        }
+
+        // MEAT PICKING COLLISION
+        function checkMeatChunksProximityGrab() {
+            if (!maxiMesh) return;
+            const grabDistance = 1.6;
+
+            for (let i = meatChunks.length - 1; i >= 0; i--) {
+                const meat = meatChunks[i];
+                const dst = maxiMesh.position.distanceTo(meat.position);
+
+                if (dst <= grabDistance) {
+                    // Picked successfully by player
+                    scene.remove(meat);
+                    meatChunks.splice(i, 1);
+                    state.rawMeat += 1;
+                    soundEngine.playCoin();
+                    updateHUD();
+                    setStatusBubble("¡¡Bife agarrado!! Metélo arriba de la parrilla.");
+                }
+            }
+        }
+
+        // GRILL COOKING MECHANICS
+        function updateGrillCookingSlots(dt) {
+            // Continuous glowing fire sparks under grill
+            emitFireParticle();
+
+            let activeCook = false;
+            grillSlots.forEach(slot => {
+                if (slot.active) {
+                    activeCook = true;
+                    // Tick cooking progress
+                    slot.timer += dt * state.grillSpeedMultiplier; // cooked faster if upgraded
+                    
+                    // Emitting smoke stream mist rises
+                    if (Math.random() < 0.15) {
+                        emitSteamParticle(slot.worldPos.x, slot.worldPos.z);
+                    }
+
+                    // Smooth transition color representation RAW to MEDIUM to COOKED
+                    // raw: 0x800000, cooked: 0x472205
+                    const progress = Math.min(1.0, slot.timer / 10.0);
+                    const r = Math.floor(128 - progress * 57);
+                    const g = Math.floor(0 + progress * 34);
+                    const b = Math.floor(0 + progress * 5);
+                    const hexColor = (r << 16) + (g << 8) + b;
+                    
+                    if (slot.model) {
+                        slot.model.material.color.setHex(hexColor);
+                    }
+
+                    if (slot.timer >= 10.0) {
+                        slot.type = 'cooked';
+                    }
+                }
+            });
+
+            // Automatic grill placement checks
+            // If Maxi has raw meat & walks very close to Parrilla, auto position on empty slots
+            const parrillaLocation = new THREE.Vector3(6.0, 0, -5.0);
+            const maxiDist = maxiMesh.position.distanceTo(parrillaLocation);
+            
+            if (maxiDist <= 3.8) {
+                // Placing raw beef
+                if (state.rawMeat > 0) {
+                    // Find empty grill slot
+                    const emptySlot = grillSlots.find(s => !s.active);
+                    if (emptySlot) {
+                        placeMeatOnGrillSlot(emptySlot);
+                        state.rawMeat -= 1;
+                        updateHUD();
+                        setStatusBubble("Carne colocada. ¡Empezó a foguear!");
+                    }
+                }
+
+                // Collecting cooked meat
+                grillSlots.forEach(slot => {
+                    if (slot.active && slot.type === 'cooked') {
+                        // Gather steak
+                        collectGrillSlotCookedBeef(slot);
+                    }
+                });
+            }
+        }
+
+        function placeMeatOnGrillSlot(slot) {
+            slot.active = true;
+            slot.timer = 0.0;
+            slot.type = 'raw';
+            
+            // Build visual raw meat block on slot position
+            const mGeo = new THREE.BoxGeometry(0.55, 0.14, 0.42);
+            const mMat = new THREE.MeshLambertMaterial({ color: 0x800000 });
+            const mMesh = new THREE.Mesh(mGeo, mMat);
+            mMesh.position.copy(slot.worldPos);
+            scene.add(mMesh);
+            slot.model = mMesh;
+        }
+
+        function collectGrillSlotCookedBeef(slot) {
+            if (slot.model) {
+                scene.remove(slot.model);
+            }
+            slot.active = false;
+            slot.model = null;
+
+            state.cookedMeat += 1;
+            soundEngine.playCoin();
+            updateHUD();
+            spawnFloatText("🍖 COCIDO", slot.worldPos);
+            setStatusBubble("¡Upa papito! ¡Asadito en su punto justo listo para vender!");
+        }
+
+        // AUTOMATED AI ASSISTANTS ACTIONS
+        function executeHelpersAI(dt) {
+            // Upgrade trigger: Hinchada de Boca automatic kill
+            if (state.hinchadaBocaUnlock) {
+                autoHinchadaTimer += dt;
+                if (autoHinchadaTimer >= 30.0) {
+                    autoHinchadaTimer = 0;
+                    bocaChantCorralSlaughter();
+                }
+            }
+
+            // Faenador Helper AI: check every 15s
+            if (state.helpers.faenador && cows.length > 0) {
+                helperFaenadorTimer += dt;
+                
+                // Animate helper faenador standing by paddock looking towards a target
+                const helperMesh = activeHelperMeshes['faenador'];
+                if (helperMesh) {
+                    helperMesh.rotation.y = Math.sin(clock.getElapsedTime() * 0.8) * 0.4;
+                }
+
+                if (helperFaenadorTimer >= 15.0) {
+                    helperFaenadorTimer = 0;
+                    // Auto slit nearest cow
+                    const chosenCow = cows[0];
+                    if (chosenCow) {
+                        // Visual floating cue
+                        setStatusBubble("¡El Faenador reventó una vaca por vos!");
+                        slaughterCow(chosenCow);
+                    }
+                }
+            }
+
+            // Juntador Helper AI: check every 5s
+            if (state.helpers.juntador) {
+                helperJuntadorTimer += dt;
+
+                const helperMesh = activeHelperMeshes['juntador'];
+                if (helperMesh) {
+                    // slight dance bob
+                    helperMesh.position.y = Math.abs(Math.sin(clock.getElapsedTime() * 3)) * 0.15;
+                }
+
+                if (helperJuntadorTimer >= 5.0) {
+                    helperJuntadorTimer = 0;
+                    if (meatChunks.length > 0) {
+                        const targetMeat = meatChunks.shift();
+                        spawnFloatText("🤖 JUNTADO", targetMeat.position);
+                        scene.remove(targetMeat);
+                        state.rawMeat += 1;
+                        updateHUD();
+                        soundEngine.playCoin();
+                    }
+                }
+            }
+
+            // Parrillero Helper AI: operates every 1s (Stands next to grill)
+            if (state.helpers.parrillero) {
+                // Parrillero handles grill slots automatically
+                // 1. Places any raw stock automatically
+                if (state.rawMeat > 0) {
+                    const emptySlot = grillSlots.find(s => !s.active);
+                    if (emptySlot) {
+                        placeMeatOnGrillSlot(emptySlot);
+                        state.rawMeat -= 1;
+                        updateHUD();
+                    }
+                }
+                // 2. Extracts finished steaks instantly
+                grillSlots.forEach(slot => {
+                    if (slot.active && slot.type === 'cooked') {
+                        collectGrillSlotCookedBeef(slot);
+                    }
+                });
+            }
+
+            // Vendedor Helper AI: operates every 10s
+            if (state.helpers.vendedor) {
+                helperVendedorTimer += dt;
+                
+                const helperMesh = activeHelperMeshes['vendedor'];
+                if (helperMesh) {
+                    // waving arms/swaying
+                    helperMesh.children[0].position.y = 1.0 + Math.sin(clock.getElapsedTime() * 4) * 0.05;
+                }
+
+                if (helperVendedorTimer >= 10.0) {
+                    helperVendedorTimer = 0;
+                    if (state.cookedMeat > 0) {
+                        const cookQty = state.cookedMeat;
+                        state.cookedMeat = 0;
+                        const payoff = cookQty * 25; // 25 coins each
+                        triggerRevenue(payoff, new THREE.Vector3(16, 1.8, 5));
+                        setStatusBubble(`💰 ¡El Vendedor cobró $${payoff} por sus ventas!`);
+                    }
+                }
+            }
+        }
+
+        // HINCHADA CHANT BOOM BUST
+        function bocaChantCorralSlaughter() {
+            soundEngine.playBocaChant();
+            setStatusBubble("¡¡LA DOCE GRITA ¡BOOOOOOO! Y EXPLOTA EL CORRAL!!");
+            
+            // Highlight text splash full screen
+            const splashText = document.createElement("div");
+            splashText.className = "absolute inset-0 flex justify-center items-center pointer-events-none z-50 text-blue-900 border-yellow-400 bg-yellow-400/90 font-black text-6xl md:text-8xl scale-125 transition-all duration-1000 uppercase opacity-100 italic tracking-wider stroke-black text-center";
+            splashText.innerHTML = "¡¡BOOOOOOOO!! <br><span class='text-4xl text-blue-950 font-sans tracking-normal block mt-4'>¡EXPLOTÓ EL FEEDLOT! 🐮🔥</span>";
+            document.body.appendChild(splashText);
+            
+            setTimeout(() => {
+                splashText.style.opacity = "0";
+                splashText.style.transform = "scale(0.8)";
+                setTimeout(() => splashText.remove(), 1000);
+            }, 1200);
+
+            // Slaughter ALL cows currently inside CORRAL
+            const listCowsSnapshot = [...cows];
+            listCowsSnapshot.forEach(c => {
+                slaughterCow(c);
+            });
+        }
+
+        // SIMULATE PARTICLES PHYSICSTicks
+        function simulateParticles(dt) {
+            for (let i = particlePool.length - 1; i >= 0; i--) {
+                const p = particlePool[i];
+                p.life -= dt;
+                
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    p.mesh.geometry.dispose();
+                    p.mesh.material.dispose();
+                    particlePool.splice(i, 1);
+                    continue;
+                }
+
+                if (p.type === 'blood') {
+                    // Physics with simple gravity
+                    p.vy -= 9.8 * dt;
+                    p.mesh.position.x += p.vx * dt;
+                    p.mesh.position.y += p.vy * dt;
+                    p.mesh.position.z += p.vz * dt;
+
+                    // Floor bouncing
+                    if (p.mesh.position.y <= 0.05) {
+                        p.mesh.position.y = 0.05;
+                        p.vx *= 0.5; // friction drag
+                        p.vz *= 0.5;
+                        p.vy = -p.vy * 0.4; // bounce dampening
+                    }
+                    
+                    const progress = p.life / p.maxLife;
+                    p.mesh.scale.set(progress, progress, progress);
+                } 
+                else if (p.type === 'fire') {
+                    p.mesh.position.x += p.vx * dt;
+                    p.mesh.position.y += p.vy * dt;
+                    p.mesh.position.z += p.vz * dt;
+                    
+                    // scale down
+                    const progress = p.life / p.maxLife;
+                    p.mesh.scale.set(progress, progress, progress);
+                } 
+                else if (p.type === 'smoke') {
+                    p.mesh.position.x += p.vx * dt;
+                    p.mesh.position.y += p.vy * dt;
+                    p.mesh.position.z += p.vz * dt;
+
+                    // Drift fading
+                    const progress = p.life / p.maxLife;
+                    p.mesh.scale.set(progress * 1.5, progress * 1.5, progress * 1.5);
+                }
+            }
+        }
+
+        // WINDOW RESIZE ADAPTER
+        function onWindowResize() {
+            const aspect = window.innerWidth / window.innerHeight;
+            const viewSize = 18;
+
+            camera.left = -viewSize * aspect;
+            camera.right = viewSize * aspect;
+            camera.top = viewSize;
+            camera.bottom = -viewSize;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
